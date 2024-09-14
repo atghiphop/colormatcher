@@ -53,6 +53,7 @@
             box-sizing: border-box;
             transition: background-color 0.2s;
             aspect-ratio: 1 / 1; /* Maintain square shape */
+            touch-action: none; /* Prevent default touch behaviors */
         }
 
         /* Remove right border from cells in the last column */
@@ -395,10 +396,10 @@
                 cell.addEventListener('mousedown', onCellMouseDown);
                 cell.addEventListener('mouseover', onCellMouseOver);
                 cell.addEventListener('mouseup', onCellMouseUp);
-                // Touch events
-                cell.addEventListener('touchstart', onCellTouchStart);
-                cell.addEventListener('touchmove', onCellTouchMove);
-                cell.addEventListener('touchend', onCellTouchEnd);
+                // Touch events with { passive: false }
+                cell.addEventListener('touchstart', onCellTouchStart, { passive: false });
+                cell.addEventListener('touchmove', onCellTouchMove, { passive: false });
+                cell.addEventListener('touchend', onCellTouchEnd, { passive: false });
             });
 
             newGameButton.addEventListener('click', initializeGame);
@@ -408,7 +409,7 @@
 
             // Handle mouse up outside the grid
             document.body.addEventListener('mouseup', onBodyMouseUp);
-            document.body.addEventListener('touchend', onBodyTouchEnd);
+            document.body.addEventListener('touchend', onBodyTouchEnd, { passive: false }); // Added passive: false
         }
 
         function toggleEraseMode() {
@@ -451,7 +452,7 @@
 
         function onCellTouchStart(event) {
             event.preventDefault();
-            if (solutionShown) return;
+            console.log('Touch Start'); // Debugging
             const touch = event.touches[0];
             const target = document.elementFromPoint(touch.clientX, touch.clientY);
             handleCellInteraction(target);
@@ -461,6 +462,7 @@
             if (solutionShown) return;
             event.preventDefault();
             if (isDrawing) {
+                console.log('Touch Move'); // Debugging
                 const touch = event.touches[0];
                 const target = document.elementFromPoint(touch.clientX, touch.clientY);
                 handleCellInteraction(target);
@@ -469,6 +471,7 @@
 
         function onCellTouchEnd(event) {
             if (isDrawing) {
+                console.log('Touch End'); // Debugging
                 isDrawing = false;
                 previousCell = null;
             }
@@ -476,6 +479,7 @@
 
         function onBodyTouchEnd(event) {
             if (isDrawing) {
+                console.log('Body Touch End'); // Debugging
                 isDrawing = false;
                 previousCell = null;
             }
