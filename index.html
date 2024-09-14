@@ -39,17 +39,30 @@
             gap: 0; /* Ensure no gaps between grid items */
             width: 100%;
             max-width: 600px;
-            flex: 1;
+            /* Remove flex: 1 to prevent stretching */
+            /* flex: 1; */
         }
 
         .cell {
             background-color: #ffffff;
             position: relative;
             cursor: pointer;
-            border: 1px solid #ccc; /* Reintroduce border */
+            /* Apply borders only to the right and bottom */
+            border-right: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
             box-sizing: border-box;
             transition: background-color 0.2s;
             aspect-ratio: 1 / 1; /* Maintain square shape */
+        }
+
+        /* Remove right border from cells in the last column */
+        .cell:nth-child(6n) {
+            border-right: none;
+        }
+
+        /* Remove bottom border from cells in the last row */
+        .cell:nth-last-child(-n+6) {
+            border-bottom: none;
         }
 
         .cell.locked {
@@ -673,8 +686,44 @@
             }
         }
 
+        function renderSolution() {
+            gridElement.innerHTML = '';
+            for (let y = 0; y < GRID_ROWS; y++) {
+                for (let x = 0; x < GRID_COLS; x++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    
+                    const cellData = grid[y][x];
+                    let solutionCell = false;
+
+                    // Check if this cell is part of any solution path
+                    for (let color of COLORS) {
+                        const path = paths[color].path;
+                        for (let i = 0; i < path.length; i++) {
+                            if (path[i][0] === x && path[i][1] === y) {
+                                cell.style.backgroundColor = color;
+                                solutionCell = true;
+                                break;
+                            }
+                        }
+                        if (solutionCell) break;
+                    }
+
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+
+                    // Add locked class if it's an endpoint
+                    if (cellData && cellData.type === 'endpoint') {
+                        cell.style.backgroundColor = cellData.color;
+                        cell.classList.add('locked');
+                    }
+
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+
         initializeGame();
     </script>
 </body>
 </html>
-
