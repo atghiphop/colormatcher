@@ -4,20 +4,26 @@
     <meta charset="UTF-8">
     <title>Color Path Game</title>
     <style>
-        /* Light Mode Theme */
+        /* Responsive and Improved Styles */
 
         body {
             font-family: Arial, sans-serif;
             background-color: #f0f0f0;
             margin: 0;
             color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
         }
 
         .game-container {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow: auto;
         }
 
         h1 {
@@ -28,10 +34,12 @@
 
         #grid {
             display: grid;
-            grid-template-columns: repeat(8, minmax(40px, 10vw));
-            grid-template-rows: repeat(8, minmax(40px, 10vw));
-            gap: 2px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            gap: 0;
+            width: 100%;
+            max-width: 600px;
+            flex: 1;
         }
 
         .cell {
@@ -39,7 +47,10 @@
             position: relative;
             cursor: pointer;
             border: 1px solid #ccc;
+            box-sizing: border-box;
             transition: background-color 0.2s;
+            width: 100%;
+            aspect-ratio: 1 / 1;
         }
 
         .cell.locked {
@@ -54,16 +65,21 @@
             display: flex;
             flex-direction: row;
             gap: 10px;
+            margin-top: 10px;
+            width: 100%;
+            max-width: 600px;
+            justify-content: center;
         }
 
         .controls button {
-            padding: 10px 20px;
+            padding: 15px 25px;
             cursor: pointer;
             font-size: 1em;
             background-color: #007bff;
             color: #fff;
             border: none;
             border-radius: 4px;
+            flex: 0 0 auto;
         }
 
         .controls button:hover {
@@ -96,6 +112,8 @@
             padding: 30px;
             text-align: center;
             border-radius: 10px;
+            width: 80%;
+            max-width: 400px;
         }
 
         .overlay-content h1 {
@@ -117,9 +135,13 @@
         }
 
         @media (max-width: 600px) {
-            #grid {
-                grid-template-columns: repeat(8, minmax(30px, 10vw));
-                grid-template-rows: repeat(8, minmax(30px, 10vw));
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .controls button {
+                padding: 10px 15px;
+                font-size: 0.9em;
             }
         }
     </style>
@@ -141,14 +163,14 @@
         </div>
     </div>
     <script>
-        const GRID_SIZE = 8;
-        const COLORS = ['red', 'blue', 'green', 'yellow'];
+        const GRID_COLS = 6;
+        const GRID_ROWS = 10;
+        const COLORS = ['red', 'blue', 'green', 'yellow', 'orange'];
         let grid = [];
         let paths = {};
         let selectedColor = null;
         let isDrawing = false;
         let previousCell = null;
-        let startingEndpoint = null;
         let solutionShown = false;
 
         const gridElement = document.getElementById('grid');
@@ -158,17 +180,19 @@
         const playAgainButton = document.getElementById('play-again');
 
         function initializeGame() {
-            grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+            grid = Array(GRID_ROWS).fill().map(() => Array(GRID_COLS).fill(null));
             paths = {};
             selectedColor = null;
             isDrawing = false;
             previousCell = null;
-            startingEndpoint = null;
             solutionShown = false;
             gridElement.innerHTML = '';
             overlay.classList.add('hidden');
             showSolutionButton.textContent = "Show Solution";
             showSolutionButton.classList.remove('shown');
+
+            gridElement.style.gridTemplateColumns = `repeat(${GRID_COLS}, 1fr)`;
+            gridElement.style.gridTemplateRows = `repeat(${GRID_ROWS}, 1fr)`;
 
             generatePuzzle();
             renderGrid();
@@ -187,6 +211,10 @@
                 if (!path) {
                     // Retry if path generation failed
                     do {
+                        // Remove the initial endpoint
+                        grid[y1][x1] = null;
+                        usedCells.delete(`${x1},${y1}`);
+
                         [x1, y1] = getRandomEmptyCell(usedCells);
                         grid[y1][x1] = { color, type: 'endpoint' };
                         usedCells.add(`${x1},${y1}`);
@@ -196,15 +224,21 @@
 
                 let [x2, y2] = path[path.length - 1];
 
-                // Ensure endpoints are not adjacent
-                while (isAdjacent(x1, y1, x2, y2)) {
+                // Ensure endpoints are not adjacent or overlapping
+                while (isAdjacent(x1, y1, x2, y2) || (x1 === x2 && y1 === y2)) {
                     // Remove the second endpoint from usedCells and grid
                     usedCells.delete(`${x2},${y2}`);
                     grid[y2][x2] = null;
+
                     // Generate a new path
                     path = generatePath(x1, y1, usedCells);
+
                     if (!path) {
                         // If we can't find a path, reset and try again
+                        // Remove the initial endpoint
+                        grid[y1][x1] = null;
+                        usedCells.delete(`${x1},${y1}`);
+
                         [x1, y1] = getRandomEmptyCell(usedCells);
                         grid[y1][x1] = { color, type: 'endpoint' };
                         usedCells.add(`${x1},${y1}`);
@@ -243,8 +277,8 @@
             let x, y;
             let attempts = 0;
             do {
-                x = Math.floor(Math.random() * GRID_SIZE);
-                y = Math.floor(Math.random() * GRID_SIZE);
+                x = Math.floor(Math.random() * GRID_COLS);
+                y = Math.floor(Math.random() * GRID_ROWS);
                 attempts++;
                 if (attempts > 1000) {
                     break;
@@ -259,7 +293,7 @@
                 let path = [[x, y]];
                 let currentX = x;
                 let currentY = y;
-                const pathLength = Math.floor(Math.random() * (GRID_SIZE - 2)) + 4; // Random path length between 4 and GRID_SIZE + 1
+                const pathLength = Math.floor(Math.random() * (GRID_COLS + GRID_ROWS - 4)) + 4; // Adjusted for grid size
                 const tempUsedCells = new Set(usedCells);
                 for (let i = 0; i < pathLength; i++) {
                     const neighbors = getAvailableNeighbors(currentX, currentY, tempUsedCells);
@@ -271,8 +305,8 @@
                     currentY = nextY;
                 }
                 if (path.length > 2) {
-                    // Check if the end point is not adjacent to the start point
-                    if (!isAdjacent(x, y, currentX, currentY)) {
+                    // Check if the end point is not adjacent or overlapping the start point
+                    if (!isAdjacent(x, y, currentX, currentY) && !(x === currentX && y === currentY)) {
                         // Update usedCells with tempUsedCells
                         tempUsedCells.forEach(cell => usedCells.add(cell));
                         return path;
@@ -295,9 +329,9 @@
                 const ny = y + dy;
                 if (
                     nx >= 0 &&
-                    nx < GRID_SIZE &&
+                    nx < GRID_COLS &&
                     ny >= 0 &&
-                    ny < GRID_SIZE &&
+                    ny < GRID_ROWS &&
                     !usedCells.has(`${nx},${ny}`)
                 ) {
                     neighbors.push([nx, ny]);
@@ -312,8 +346,8 @@
 
         function renderGrid() {
             gridElement.innerHTML = '';
-            for (let y = 0; y < GRID_SIZE; y++) {
-                for (let x = 0; x < GRID_SIZE; x++) {
+            for (let y = 0; y < GRID_ROWS; y++) {
+                for (let x = 0; x < GRID_COLS; x++) {
                     const cell = document.createElement('div');
                     cell.classList.add('cell');
                     cell.dataset.x = x;
@@ -360,16 +394,17 @@
         }
 
         function onCellMouseOver(event) {
-            if (!isDrawing || solutionShown) return;
+            if (solutionShown) return;
             event.preventDefault();
-            handleCellInteraction(event.currentTarget);
+            if (isDrawing) {
+                handleCellInteraction(event.currentTarget);
+            }
         }
 
         function onCellMouseUp(event) {
             if (isDrawing) {
                 isDrawing = false;
                 previousCell = null;
-                startingEndpoint = null;
             }
         }
 
@@ -377,7 +412,6 @@
             if (isDrawing) {
                 isDrawing = false;
                 previousCell = null;
-                startingEndpoint = null;
             }
         }
 
@@ -390,18 +424,19 @@
         }
 
         function onCellTouchMove(event) {
-            if (!isDrawing || solutionShown) return;
+            if (solutionShown) return;
             event.preventDefault();
-            const touch = event.touches[0];
-            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-            handleCellInteraction(target);
+            if (isDrawing) {
+                const touch = event.touches[0];
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                handleCellInteraction(target);
+            }
         }
 
         function onCellTouchEnd(event) {
             if (isDrawing) {
                 isDrawing = false;
                 previousCell = null;
-                startingEndpoint = null;
             }
         }
 
@@ -409,7 +444,6 @@
             if (isDrawing) {
                 isDrawing = false;
                 previousCell = null;
-                startingEndpoint = null;
             }
         }
 
@@ -421,24 +455,26 @@
             const cellData = grid[y][x];
 
             if (!isDrawing) {
-                if (cellData && cellData.color === selectedColor && !cellData.locked) {
-                    // Continue drawing from any of your own color's cells
+                if (cellData && cellData.color && cellData.type === 'endpoint') {
+                    // Start drawing from your own endpoint
+                    selectedColor = cellData.color;
                     isDrawing = true;
                     previousCell = [x, y];
-                    startingEndpoint = [x, y];
-                } else if (cellData && cellData.color && !cellData.locked) {
+                } else if (cellData && cellData.color && cellData.type !== 'endpoint') {
                     // Start drawing and set selectedColor
                     selectedColor = cellData.color;
                     isDrawing = true;
                     previousCell = [x, y];
-                    startingEndpoint = [x, y];
+                } else if (cellData && cellData.color === selectedColor && cellData.type !== 'endpoint') {
+                    // Erase the cell if it's part of your own path (even if locked) and not an endpoint
+                    eraseCell(x, y);
                 }
             } else {
                 if (x === previousCell[0] && y === previousCell[1]) return; // Ignore if same cell
 
                 if (isAdjacent(x, y, previousCell[0], previousCell[1])) {
-                    if (!cellData || (cellData.color === selectedColor && !cellData.locked)) {
-                        // Empty cell or own color (not locked), draw path
+                    if (!cellData) {
+                        // Empty cell, draw path
                         grid[y][x] = { color: selectedColor, type: 'path' };
                         renderPathCell(x, y, selectedColor);
                         previousCell = [x, y];
@@ -447,8 +483,12 @@
                         if (isPathComplete(selectedColor)) {
                             completePath(selectedColor);
                         }
+                    } else if (cellData.color === selectedColor && cellData.type !== 'endpoint') {
+                        // Erase the cell if it's part of your own path and not an endpoint
+                        eraseCell(x, y);
+                        previousCell = [x, y];
                     } else {
-                        // Can't draw over other paths or locked cells
+                        // Can't draw over other paths or endpoints
                         return;
                     }
                 }
@@ -459,6 +499,24 @@
             const cell = document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
             if (cell) {
                 cell.style.backgroundColor = color;
+                cell.classList.remove('locked');
+            }
+        }
+
+        function eraseCell(x, y) {
+            const cellData = grid[y][x];
+            if (cellData && cellData.type !== 'endpoint') {
+                grid[y][x] = null;
+                const cell = document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+                if (cell) {
+                    cell.style.backgroundColor = '#ffffff';
+                    cell.classList.remove('locked');
+                }
+                // After erasing, check if the path is still complete
+                if (paths[cellData.color].completed && !isPathComplete(cellData.color)) {
+                    paths[cellData.color].completed = false;
+                    unlockPath(cellData.color);
+                }
             }
         }
 
@@ -472,7 +530,6 @@
             // Stop drawing
             isDrawing = false;
             previousCell = null;
-            startingEndpoint = null;
 
             if (checkWinCondition()) {
                 setTimeout(() => {
@@ -482,14 +539,29 @@
         }
 
         function lockPath(color) {
-            for (let y = 0; y < GRID_SIZE; y++) {
-                for (let x = 0; x < GRID_SIZE; x++) {
+            for (let y = 0; y < GRID_ROWS; y++) {
+                for (let x = 0; x < GRID_COLS; x++) {
                     const cellData = grid[y][x];
-                    if (cellData && cellData.color === color) {
+                    if (cellData && cellData.color === color && cellData.type !== 'endpoint') {
                         cellData.locked = true;
                         const cell = document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
                         if (cell) {
                             cell.classList.add('locked');
+                        }
+                    }
+                }
+            }
+        }
+
+        function unlockPath(color) {
+            for (let y = 0; y < GRID_ROWS; y++) {
+                for (let x = 0; x < GRID_COLS; x++) {
+                    const cellData = grid[y][x];
+                    if (cellData && cellData.color === color && cellData.type !== 'endpoint') {
+                        cellData.locked = false;
+                        const cell = document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+                        if (cell) {
+                            cell.classList.remove('locked');
                         }
                     }
                 }
@@ -501,7 +573,7 @@
         }
 
         function isPathComplete(color) {
-            const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+            const visited = Array(GRID_ROWS).fill().map(() => Array(GRID_COLS).fill(false));
             const queue = [];
 
             const [ex1, ey1] = paths[color].endpoints[0];
@@ -550,7 +622,7 @@
             directions.forEach(([dx, dy]) => {
                 const nx = x + dx;
                 const ny = y + dy;
-                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+                if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
                     neighbors.push([nx, ny]);
                 }
             });
@@ -580,8 +652,8 @@
 
         function renderSolution() {
             gridElement.innerHTML = '';
-            for (let y = 0; y < GRID_SIZE; y++) {
-                for (let x = 0; x < GRID_SIZE; x++) {
+            for (let y = 0; y < GRID_ROWS; y++) {
+                for (let x = 0; x < GRID_COLS; x++) {
                     const cell = document.createElement('div');
                     cell.classList.add('cell');
                     const cellData = grid[y][x];
