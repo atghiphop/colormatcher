@@ -54,6 +54,7 @@
             transition: background-color 0.2s;
             aspect-ratio: 1 / 1; /* Maintain square shape */
             touch-action: none; /* Prevent default touch behaviors */
+            user-select: none; /* Prevent text selection */
         }
 
         /* Remove right border from cells in the last column */
@@ -452,17 +453,13 @@
 
         function onCellTouchStart(event) {
             event.preventDefault();
-            console.log('Touch Start'); // Debugging
-            const touch = event.touches[0];
-            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-            handleCellInteraction(target);
+            handleCellInteraction(event.target);
         }
 
         function onCellTouchMove(event) {
             if (solutionShown) return;
             event.preventDefault();
             if (isDrawing) {
-                console.log('Touch Move'); // Debugging
                 const touch = event.touches[0];
                 const target = document.elementFromPoint(touch.clientX, touch.clientY);
                 handleCellInteraction(target);
@@ -471,7 +468,6 @@
 
         function onCellTouchEnd(event) {
             if (isDrawing) {
-                console.log('Touch End'); // Debugging
                 isDrawing = false;
                 previousCell = null;
             }
@@ -479,7 +475,6 @@
 
         function onBodyTouchEnd(event) {
             if (isDrawing) {
-                console.log('Body Touch End'); // Debugging
                 isDrawing = false;
                 previousCell = null;
             }
@@ -495,32 +490,27 @@
             if (solutionShown) return; // Prevent interaction when solution is shown
 
             if (eraseMode) {
-                if (cellData && cellData.color && cellData.type !== 'endpoint') {
+                if (cellData && cellData.color && !cellData.locked && cellData.type !== 'endpoint') {
                     eraseCell(x, y);
                 }
             } else {
                 if (!isDrawing) {
-                    if (cellData && cellData.color) {
-                        if (cellData.type === 'endpoint') {
-                            // Start drawing from your own endpoint
-                            selectedColor = cellData.color;
-                            isDrawing = true;
-                            previousCell = [x, y];
-                        } else if (cellData.type === 'path') {
-                            // Start drawing and set selectedColor
-                            selectedColor = cellData.color;
-                            isDrawing = true;
-                            previousCell = [x, y];
-                        }
+                    if (cellData && cellData.color && !cellData.locked) {
+                        // Start drawing from any of your own color's cells
+                        selectedColor = cellData.color;
+                        isDrawing = true;
+                        previousCell = [x, y];
                     }
                 } else {
-                    if (cellData && cellData.color === selectedColor && cellData.type !== 'endpoint') {
+                    if (x === previousCell[0] && y === previousCell[1]) return; // Ignore if same cell
+
+                    if (cellData && cellData.color === selectedColor && !cellData.locked && cellData.type !== 'endpoint') {
                         // Erase the cell if it's part of your own path and not an endpoint
                         eraseCell(x, y);
                         previousCell = [x, y];
                     } else if (isAdjacent(x, y, previousCell[0], previousCell[1])) {
-                        if (!cellData) {
-                            // Empty cell, draw path
+                        if (!cellData || (cellData.color === selectedColor && !cellData.locked)) {
+                            // Empty cell or own color (not locked), draw path
                             grid[y][x] = { color: selectedColor, type: 'path' };
                             renderPathCell(x, y, selectedColor);
                             previousCell = [x, y];
