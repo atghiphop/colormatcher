@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Color Path Game</title>
+    <style>
+        /* Light Mode Theme */
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            color: #333;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 2em;
+            text-align: center;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(40px, 10vw));
+            grid-template-rows: repeat(8, minmax(40px, 10vw));
+            gap: 2px;
+            margin-bottom: 20px;
+        }
+
+        .cell {
+            background-color: #ffffff;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            transition: background-color 0.2s;
+        }
+
+        .cell.locked {
+            border: 2px solid gold;
+        }
+
+        .cell:hover {
+            background-color: #e0e0e0;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+        }
+
+        .controls button {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 1em;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+
+        #show-solution.shown {
+            background-color: #28a745;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(240, 240, 240, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .overlay.hidden {
+            display: none;
+        }
+
+        .overlay-content {
+            background: #fff;
+            color: #333;
+            padding: 30px;
+            text-align: center;
+            border-radius: 10px;
+        }
+
+        .overlay-content h1 {
+            margin-top: 0;
+        }
+
+        .overlay-content button {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 1em;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .overlay-content button:hover {
+            background-color: #0056b3;
+        }
+
+        @media (max-width: 600px) {
+            #grid {
+                grid-template-columns: repeat(8, minmax(30px, 10vw));
+                grid-template-rows: repeat(8, minmax(30px, 10vw));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Color Path Game</h1>
+        <div id="grid"></div>
+        <div class="controls">
+            <button id="new-game">New Game</button>
+            <button id="show-solution">Show Solution</button>
+        </div>
+    </div>
+    <div id="overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h1>Congratulations!</h1>
+            <p>You've completed the puzzle!</p>
+            <button id="play-again">Play Again</button>
+        </div>
+    </div>
+    <script>
+        const GRID_SIZE = 8;
+        const COLORS = ['red', 'blue', 'green', 'yellow'];
+        let grid = [];
+        let paths = {};
+        let selectedColor = null;
+        let isDrawing = false;
+        let previousCell = null;
+        let startingEndpoint = null;
+        let solutionShown = false;
+
+        const gridElement = document.getElementById('grid');
+        const newGameButton = document.getElementById('new-game');
+        const showSolutionButton = document.getElementById('show-solution');
+        const overlay = document.getElementById('overlay');
+        const playAgainButton = document.getElementById('play-again');
+
+        function initializeGame() {
+            grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+            paths = {};
+            selectedColor = null;
+            isDrawing = false;
+            previousCell = null;
+            startingEndpoint = null;
+            solutionShown = false;
+            gridElement.innerHTML = '';
+            overlay.classList.add('hidden');
+            showSolutionButton.textContent = "Show Solution";
+            showSolutionButton.classList.remove('shown');
+
+            generatePuzzle();
+            renderGrid();
+            setupEventListeners();
+        }
+
+        function generatePuzzle() {
+            const usedCells = new Set();
+
+            COLORS.forEach(color => {
+                let [x1, y1] = getRandomEmptyCell(usedCells);
+                grid[y1][x1] = { color, type: 'endpoint' };
+                usedCells.add(`${x1},${y1}`);
+
+                let path = generatePath(x1, y1, usedCells);
+                if (!path) {
+                    // Retry if path generation failed
+                    do {
+                        [x1, y1] = getRandomEmptyCell(usedCells);
+                        grid[y1][x1] = { color, type: 'endpoint' };
+                        usedCells.add(`${x1},${y1}`);
+                        path = generatePath(x1, y1, usedCells);
+                    } while (!path);
+                }
+
+                let [x2, y2] = path[path.length - 1];
+
+                // Ensure endpoints are not adjacent
+                while (isAdjacent(x1, y1, x2, y2)) {
+                    // Remove the second endpoint from usedCells and grid
+                    usedCells.delete(`${x2},${y2}`);
+                    grid[y2][x2] = null;
+                    // Generate a new path
+                    path = generatePath(x1, y1, usedCells);
+                    if (!path) {
+                        // If we can't find a path, reset and try again
+                        [x1, y1] = getRandomEmptyCell(usedCells);
+                        grid[y1][x1] = { color, type: 'endpoint' };
+                        usedCells.add(`${x1},${y1}`);
+                        path = generatePath(x1, y1, usedCells);
+                    }
+                    [x2, y2] = path[path.length - 1];
+                }
+
+                grid[y2][x2] = { color, type: 'endpoint' };
+                usedCells.add(`${x2},${y2}`);
+
+                // Mark the path cells and add them to usedCells
+                for (let i = 1; i < path.length - 1; i++) {
+                    const [x, y] = path[i];
+                    grid[y][x] = { color, type: 'path' };
+                    usedCells.add(`${x},${y}`);
+                }
+
+                // Store the complete path and endpoints
+                paths[color] = {
+                    path: path,
+                    endpoints: [[x1, y1], [x2, y2]],
+                    completed: false
+                };
+
+                // Remove the path cells from the grid to create the puzzle state, but keep them in usedCells
+                for (let i = 1; i < path.length - 1; i++) {
+                    const [x, y] = path[i];
+                    grid[y][x] = null;
+                    // Do NOT remove from usedCells to prevent overlapping paths
+                }
+            });
+        }
+
+        function getRandomEmptyCell(usedCells) {
+            let x, y;
+            let attempts = 0;
+            do {
+                x = Math.floor(Math.random() * GRID_SIZE);
+                y = Math.floor(Math.random() * GRID_SIZE);
+                attempts++;
+                if (attempts > 1000) {
+                    break;
+                }
+            } while (usedCells.has(`${x},${y}`));
+            return [x, y];
+        }
+
+        function generatePath(x, y, usedCells) {
+            const maxAttempts = 500;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                let path = [[x, y]];
+                let currentX = x;
+                let currentY = y;
+                const pathLength = Math.floor(Math.random() * (GRID_SIZE - 2)) + 4; // Random path length between 4 and GRID_SIZE + 1
+                const tempUsedCells = new Set(usedCells);
+                for (let i = 0; i < pathLength; i++) {
+                    const neighbors = getAvailableNeighbors(currentX, currentY, tempUsedCells);
+                    if (neighbors.length === 0) break;
+                    const [nextX, nextY] = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    path.push([nextX, nextY]);
+                    tempUsedCells.add(`${nextX},${nextY}`);
+                    currentX = nextX;
+                    currentY = nextY;
+                }
+                if (path.length > 2) {
+                    // Check if the end point is not adjacent to the start point
+                    if (!isAdjacent(x, y, currentX, currentY)) {
+                        // Update usedCells with tempUsedCells
+                        tempUsedCells.forEach(cell => usedCells.add(cell));
+                        return path;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getAvailableNeighbors(x, y, usedCells) {
+            const directions = shuffleArray([
+                [0, -1], // Up
+                [1, 0],  // Right
+                [0, 1],  // Down
+                [-1, 0], // Left
+            ]);
+            const neighbors = [];
+            directions.forEach(([dx, dy]) => {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (
+                    nx >= 0 &&
+                    nx < GRID_SIZE &&
+                    ny >= 0 &&
+                    ny < GRID_SIZE &&
+                    !usedCells.has(`${nx},${ny}`)
+                ) {
+                    neighbors.push([nx, ny]);
+                }
+            });
+            return neighbors;
+        }
+
+        function shuffleArray(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function renderGrid() {
+            gridElement.innerHTML = '';
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    const cellData = grid[y][x];
+                    if (cellData) {
+                        if (cellData.type === 'endpoint') {
+                            cell.style.backgroundColor = cellData.color;
+                        }
+                        if (cellData.locked) {
+                            cell.classList.add('locked');
+                        }
+                    }
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+
+        function setupEventListeners() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                // Mouse events
+                cell.addEventListener('mousedown', onCellMouseDown);
+                cell.addEventListener('mouseover', onCellMouseOver);
+                cell.addEventListener('mouseup', onCellMouseUp);
+                // Touch events
+                cell.addEventListener('touchstart', onCellTouchStart);
+                cell.addEventListener('touchmove', onCellTouchMove);
+                cell.addEventListener('touchend', onCellTouchEnd);
+            });
+
+            newGameButton.addEventListener('click', initializeGame);
+            playAgainButton.addEventListener('click', initializeGame);
+            showSolutionButton.addEventListener('click', toggleSolution);
+
+            // Handle mouse up outside the grid
+            document.body.addEventListener('mouseup', onBodyMouseUp);
+            document.body.addEventListener('touchend', onBodyTouchEnd);
+        }
+
+        function onCellMouseDown(event) {
+            event.preventDefault();
+            if (solutionShown) return;
+            handleCellInteraction(event.currentTarget);
+        }
+
+        function onCellMouseOver(event) {
+            if (!isDrawing || solutionShown) return;
+            event.preventDefault();
+            handleCellInteraction(event.currentTarget);
+        }
+
+        function onCellMouseUp(event) {
+            if (isDrawing) {
+                isDrawing = false;
+                previousCell = null;
+                startingEndpoint = null;
+            }
+        }
+
+        function onBodyMouseUp(event) {
+            if (isDrawing) {
+                isDrawing = false;
+                previousCell = null;
+                startingEndpoint = null;
+            }
+        }
+
+        function onCellTouchStart(event) {
+            event.preventDefault();
+            if (solutionShown) return;
+            const touch = event.touches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            handleCellInteraction(target);
+        }
+
+        function onCellTouchMove(event) {
+            if (!isDrawing || solutionShown) return;
+            event.preventDefault();
+            const touch = event.touches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            handleCellInteraction(target);
+        }
+
+        function onCellTouchEnd(event) {
+            if (isDrawing) {
+                isDrawing = false;
+                previousCell = null;
+                startingEndpoint = null;
+            }
+        }
+
+        function onBodyTouchEnd(event) {
+            if (isDrawing) {
+                isDrawing = false;
+                previousCell = null;
+                startingEndpoint = null;
+            }
+        }
+
+        function handleCellInteraction(target) {
+            if (!target || !target.classList.contains('cell')) return;
+
+            const x = parseInt(target.dataset.x);
+            const y = parseInt(target.dataset.y);
+            const cellData = grid[y][x];
+
+            if (!isDrawing) {
+                if (cellData && cellData.color === selectedColor && !cellData.locked) {
+                    // Continue drawing from any of your own color's cells
+                    isDrawing = true;
+                    previousCell = [x, y];
+                    startingEndpoint = [x, y];
+                } else if (cellData && cellData.color && !cellData.locked) {
+                    // Start drawing and set selectedColor
+                    selectedColor = cellData.color;
+                    isDrawing = true;
+                    previousCell = [x, y];
+                    startingEndpoint = [x, y];
+                }
+            } else {
+                if (x === previousCell[0] && y === previousCell[1]) return; // Ignore if same cell
+
+                if (isAdjacent(x, y, previousCell[0], previousCell[1])) {
+                    if (!cellData || (cellData.color === selectedColor && !cellData.locked)) {
+                        // Empty cell or own color (not locked), draw path
+                        grid[y][x] = { color: selectedColor, type: 'path' };
+                        renderPathCell(x, y, selectedColor);
+                        previousCell = [x, y];
+
+                        // After each move, check if the path is completed
+                        if (isPathComplete(selectedColor)) {
+                            completePath(selectedColor);
+                        }
+                    } else {
+                        // Can't draw over other paths or locked cells
+                        return;
+                    }
+                }
+            }
+        }
+
+        function renderPathCell(x, y, color) {
+            const cell = document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+            if (cell) {
+                cell.style.backgroundColor = color;
+            }
+        }
+
+        function completePath(color) {
+            // Lock the path
+            lockPath(color);
+
+            // Mark the path as completed
+            paths[color].completed = true;
+
+            // Stop drawing
+            isDrawing = false;
+            previousCell = null;
+            startingEndpoint = null;
+
+            if (checkWinCondition()) {
+                setTimeout(() => {
+                    overlay.classList.remove('hidden');
+                }, 100);
+            }
+        }
+
+        function lockPath(color) {
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cellData = grid[y][x];
+                    if (cellData && cellData.color === color) {
+                        cellData.locked = true;
+                        const cell = document.querySelector(`.cell[data-x='${x}'][data-y='${y}']`);
+                        if (cell) {
+                            cell.classList.add('locked');
+                        }
+                    }
+                }
+            }
+        }
+
+        function isAdjacent(x1, y1, x2, y2) {
+            return (Math.abs(x1 - x2) + Math.abs(y1 - y2)) === 1;
+        }
+
+        function isPathComplete(color) {
+            const visited = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+            const queue = [];
+
+            const [ex1, ey1] = paths[color].endpoints[0];
+            const [ex2, ey2] = paths[color].endpoints[1];
+            queue.push([ex1, ey1]);
+            visited[ey1][ex1] = true;
+
+            while (queue.length > 0) {
+                const [x, y] = queue.shift();
+
+                if (x === ex2 && y === ey2) {
+                    return true; // Endpoints are connected
+                }
+
+                const neighbors = getNeighbors(x, y);
+                neighbors.forEach(([nx, ny]) => {
+                    if (!visited[ny][nx]) {
+                        const neighborData = grid[ny][nx];
+                        if (neighborData && neighborData.color === color) {
+                            visited[ny][nx] = true;
+                            queue.push([nx, ny]);
+                        }
+                    }
+                });
+            }
+            return false;
+        }
+
+        function checkWinCondition() {
+            for (let color of COLORS) {
+                if (!paths[color].completed) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function getNeighbors(x, y) {
+            const directions = [
+                [0, -1], // Up
+                [1, 0],  // Right
+                [0, 1],  // Down
+                [-1, 0], // Left
+            ];
+            const neighbors = [];
+            directions.forEach(([dx, dy]) => {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+                    neighbors.push([nx, ny]);
+                }
+            });
+            return neighbors;
+        }
+
+        function toggleSolution() {
+            if (solutionShown) {
+                // Hide solution
+                renderGrid();
+                solutionShown = false;
+                showSolutionButton.textContent = "Show Solution";
+                showSolutionButton.classList.remove('shown');
+                setupEventListeners();
+            } else {
+                // Show solution
+                solutionShown = true;
+                renderSolution();
+                showSolutionButton.textContent = "Hide Solution";
+                showSolutionButton.classList.add('shown');
+                // Remove event listeners to prevent interaction
+                document.querySelectorAll('.cell').forEach(cell => {
+                    cell.replaceWith(cell.cloneNode(true));
+                });
+            }
+        }
+
+        function renderSolution() {
+            gridElement.innerHTML = '';
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    const cellData = grid[y][x];
+                    let solutionCell = false;
+
+                    // Check if this cell is part of any solution path
+                    for (let color of COLORS) {
+                        const path = paths[color].path;
+                        for (let i = 0; i < path.length; i++) {
+                            if (path[i][0] === x && path[i][1] === y) {
+                                cell.style.backgroundColor = color;
+                                solutionCell = true;
+                                break;
+                            }
+                        }
+                        if (solutionCell) break;
+                    }
+
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+
+                    // Add locked class if it's an endpoint
+                    if (cellData && cellData.type === 'endpoint') {
+                        cell.style.backgroundColor = cellData.color;
+                        cell.classList.add('locked');
+                    }
+
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+
+        initializeGame();
+    </script>
+</body>
+</html>
