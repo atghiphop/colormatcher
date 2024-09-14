@@ -36,7 +36,7 @@
             display: grid;
             grid-template-columns: repeat(6, 1fr);
             grid-template-rows: repeat(10, 1fr);
-            gap: 0;
+            gap: 0; /* Ensure no gaps between grid items */
             width: 100%;
             max-width: 600px;
             flex: 1;
@@ -46,15 +46,14 @@
             background-color: #ffffff;
             position: relative;
             cursor: pointer;
-            border: 1px solid #ccc;
+            border: 1px solid #ccc; /* Reintroduce border */
             box-sizing: border-box;
             transition: background-color 0.2s;
-            width: 100%;
-            aspect-ratio: 1 / 1;
+            aspect-ratio: 1 / 1; /* Maintain square shape */
         }
 
         .cell.locked {
-            border: 2px solid gold;
+            border: 2px solid gold; /* Adjust border for locked cells */
         }
 
         .cell:hover {
@@ -84,6 +83,10 @@
 
         .controls button:hover {
             background-color: #0056b3;
+        }
+
+        .controls button.active {
+            background-color: #dc3545; /* Example active state color */
         }
 
         #show-solution.shown {
@@ -153,6 +156,7 @@
         <div class="controls">
             <button id="new-game">New Game</button>
             <button id="show-solution">Show Solution</button>
+            <button id="erase-mode">Erase Mode</button> <!-- Erase Mode Button -->
         </div>
     </div>
     <div id="overlay" class="overlay hidden">
@@ -172,12 +176,14 @@
         let isDrawing = false;
         let previousCell = null;
         let solutionShown = false;
+        let eraseMode = false; // Added erase mode state
 
         const gridElement = document.getElementById('grid');
         const newGameButton = document.getElementById('new-game');
         const showSolutionButton = document.getElementById('show-solution');
         const overlay = document.getElementById('overlay');
         const playAgainButton = document.getElementById('play-again');
+        const eraseModeButton = document.getElementById('erase-mode'); // Added erase mode button
 
         function initializeGame() {
             grid = Array(GRID_ROWS).fill().map(() => Array(GRID_COLS).fill(null));
@@ -186,10 +192,13 @@
             isDrawing = false;
             previousCell = null;
             solutionShown = false;
+            eraseMode = false; // Reset erase mode
             gridElement.innerHTML = '';
             overlay.classList.add('hidden');
             showSolutionButton.textContent = "Show Solution";
             showSolutionButton.classList.remove('shown');
+            eraseModeButton.textContent = "Erase Mode";
+            eraseModeButton.classList.remove('active');
 
             gridElement.style.gridTemplateColumns = `repeat(${GRID_COLS}, 1fr)`;
             gridElement.style.gridTemplateRows = `repeat(${GRID_ROWS}, 1fr)`;
@@ -352,6 +361,7 @@
                     cell.classList.add('cell');
                     cell.dataset.x = x;
                     cell.dataset.y = y;
+                    
                     const cellData = grid[y][x];
                     if (cellData) {
                         if (cellData.type === 'endpoint') {
@@ -381,15 +391,26 @@
             newGameButton.addEventListener('click', initializeGame);
             playAgainButton.addEventListener('click', initializeGame);
             showSolutionButton.addEventListener('click', toggleSolution);
+            eraseModeButton.addEventListener('click', toggleEraseMode); // Added erase mode toggle
 
             // Handle mouse up outside the grid
             document.body.addEventListener('mouseup', onBodyMouseUp);
             document.body.addEventListener('touchend', onBodyTouchEnd);
         }
 
+        function toggleEraseMode() {
+            eraseMode = !eraseMode;
+            eraseModeButton.textContent = eraseMode ? "Drawing Mode" : "Erase Mode";
+            eraseModeButton.classList.toggle('active', eraseMode);
+            if (eraseMode) {
+                isDrawing = false;
+                selectedColor = null;
+                previousCell = null;
+            }
+        }
+
         function onCellMouseDown(event) {
             event.preventDefault();
-            if (solutionShown) return;
             handleCellInteraction(event.currentTarget);
         }
 
@@ -454,42 +475,44 @@
             const y = parseInt(target.dataset.y);
             const cellData = grid[y][x];
 
-            if (!isDrawing) {
-                if (cellData && cellData.color && cellData.type === 'endpoint') {
-                    // Start drawing from your own endpoint
-                    selectedColor = cellData.color;
-                    isDrawing = true;
-                    previousCell = [x, y];
-                } else if (cellData && cellData.color && cellData.type !== 'endpoint') {
-                    // Start drawing and set selectedColor
-                    selectedColor = cellData.color;
-                    isDrawing = true;
-                    previousCell = [x, y];
-                } else if (cellData && cellData.color === selectedColor && cellData.type !== 'endpoint') {
-                    // Erase the cell if it's part of your own path (even if locked) and not an endpoint
+            if (solutionShown) return; // Prevent interaction when solution is shown
+
+            if (eraseMode) {
+                if (cellData && cellData.color && cellData.type !== 'endpoint') {
                     eraseCell(x, y);
                 }
             } else {
-                if (x === previousCell[0] && y === previousCell[1]) return; // Ignore if same cell
-
-                if (isAdjacent(x, y, previousCell[0], previousCell[1])) {
-                    if (!cellData) {
-                        // Empty cell, draw path
-                        grid[y][x] = { color: selectedColor, type: 'path' };
-                        renderPathCell(x, y, selectedColor);
-                        previousCell = [x, y];
-
-                        // After each move, check if the path is completed
-                        if (isPathComplete(selectedColor)) {
-                            completePath(selectedColor);
+                if (!isDrawing) {
+                    if (cellData && cellData.color) {
+                        if (cellData.type === 'endpoint') {
+                            // Start drawing from your own endpoint
+                            selectedColor = cellData.color;
+                            isDrawing = true;
+                            previousCell = [x, y];
+                        } else if (cellData.type === 'path') {
+                            // Start drawing and set selectedColor
+                            selectedColor = cellData.color;
+                            isDrawing = true;
+                            previousCell = [x, y];
                         }
-                    } else if (cellData.color === selectedColor && cellData.type !== 'endpoint') {
+                    }
+                } else {
+                    if (cellData && cellData.color === selectedColor && cellData.type !== 'endpoint') {
                         // Erase the cell if it's part of your own path and not an endpoint
                         eraseCell(x, y);
                         previousCell = [x, y];
-                    } else {
-                        // Can't draw over other paths or endpoints
-                        return;
+                    } else if (isAdjacent(x, y, previousCell[0], previousCell[1])) {
+                        if (!cellData) {
+                            // Empty cell, draw path
+                            grid[y][x] = { color: selectedColor, type: 'path' };
+                            renderPathCell(x, y, selectedColor);
+                            previousCell = [x, y];
+
+                            // After each move, check if the path is completed
+                            if (isPathComplete(selectedColor)) {
+                                completePath(selectedColor);
+                            }
+                        }
                     }
                 }
             }
@@ -650,43 +673,8 @@
             }
         }
 
-        function renderSolution() {
-            gridElement.innerHTML = '';
-            for (let y = 0; y < GRID_ROWS; y++) {
-                for (let x = 0; x < GRID_COLS; x++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell');
-                    const cellData = grid[y][x];
-                    let solutionCell = false;
-
-                    // Check if this cell is part of any solution path
-                    for (let color of COLORS) {
-                        const path = paths[color].path;
-                        for (let i = 0; i < path.length; i++) {
-                            if (path[i][0] === x && path[i][1] === y) {
-                                cell.style.backgroundColor = color;
-                                solutionCell = true;
-                                break;
-                            }
-                        }
-                        if (solutionCell) break;
-                    }
-
-                    cell.dataset.x = x;
-                    cell.dataset.y = y;
-
-                    // Add locked class if it's an endpoint
-                    if (cellData && cellData.type === 'endpoint') {
-                        cell.style.backgroundColor = cellData.color;
-                        cell.classList.add('locked');
-                    }
-
-                    gridElement.appendChild(cell);
-                }
-            }
-        }
-
         initializeGame();
     </script>
 </body>
 </html>
+
